@@ -1,50 +1,49 @@
-import { GoogleSpreadsheet } from "google-spreadsheet"
-import credentials from "../credentials/credentials.json"
+import express from "express"
+import CalculateAvarages from "./calculate-avarages"
+import Avarages from "./avarages"
 
-async function CalculateAvarages() {
-  const doc = new GoogleSpreadsheet("1LkI8yEfIDubIEZPcBT_f6GrMZqzlW1L0ZsGLbK7uqv0")
+const app = express()
 
-  await doc.useServiceAccountAuth({
-    client_email: credentials.client_email,
-    private_key: credentials.private_key
+app.get("/", (req, res) => {
+  res.redirect("/avarages")
+})
+
+app.get("/avarages", async (req, res) => {
+  if(!req.query.id) {
+    return res.status(400).json({
+      message: "Please insert a valid id."
+    })
+  }
+
+  const id: string = String(req.query.id)
+  
+  const allAvarages = await Avarages(id)
+  console.log(Avarages(id), id)
+  res.status(200).json({
+    notas: allAvarages
   })
+})
+app.post("/calculate-avarages", async (req,res) => {
+  if(!req.query.id) {
+    return res.status(400).json({
+      message: "Please insert a valid id."
+    })
+  }
 
-  console.log("Loading spreadsheet...")
-  await doc.loadInfo()
-  console.log("Spreadsheet name: ", doc.title)
-
-  const sheet = doc.sheetsByIndex[0]
-  const rows = await sheet.getRows()
-
-  console.log("Calculando notas...")
-  const avarages = Promise.all(rows.map(async ({ matricula, aluno, p1, p2, p3, faltas }) => {
-    let totalGrade: number = (parseInt(p1) + parseInt(p2) + parseInt(p3)) / 3
-    totalGrade = parseInt(totalGrade.toFixed())
+  try {
+    const id: string = String(req.query.id)
     
-    if(totalGrade > 70){
-      rows[matricula - 1].situacao = "Passou!"
-      rows[matricula - 1].nota_para_aprovacao_final = "0"
-      await rows[matricula - 1].save()
-      console.log(`${aluno} passou!`)
-    } else if(totalGrade > 70 && faltas >= 15 || faltas >= 15) {
-      rows[matricula - 1].situacao = "Reprovado por falta"
-      rows[matricula - 1].nota_para_aprovacao_final = "0"
-      await rows[matricula - 1].save()
-      console.log(`${aluno} reprovou por falta...`)
-    } else if(totalGrade < 50) {
-      rows[matricula - 1].situacao = "Reprovado por nota"
-      rows[matricula - 1].nota_para_aprovacao_final = "0"
-      await rows[matricula - 1].save()
-      console.log(`${aluno} reprovou por nota...`)
-    } else if(70 > totalGrade && totalGrade >= 50) {
-      rows[matricula - 1].situacao = "Exame Final..."
-      rows[matricula - 1].nota_para_aprovacao_final = 100 - totalGrade
-      await rows[matricula - 1].save()
-      console.log(`${aluno} tem que fazer o exame final...`)
-    }
-  }))
+    CalculateAvarages(id)
+  } catch(error) {
+    return res.status(400).json(error)
+  } finally {
+    res.json({
+      message: "Todas as notas foram calculadas e escritas na planilha."
+    })
+  }
 
-  return avarages
-}
 
-CalculateAvarages()
+})
+app.listen(3000, () => {
+  console.log("The server is running on port 3000")
+})
